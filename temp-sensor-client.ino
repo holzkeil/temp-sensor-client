@@ -3,6 +3,14 @@
 #include <U8g2lib.h>
 #include <SPI.h>
 #include <NRFLite.h>
+#include <EEPROM.h>
+
+// TODO
+// performance draw, cache max, min
+// -1 value bug, not visible
+// send struct includes: interval
+// sub interval measuring
+// display show last avarage, interval counter, and current sub interval
 
 #define TEMPSENSORPIN 4
 #define TEMPRESOLUTION 12
@@ -13,6 +21,9 @@
 #define DESTINATION_RADIO_ID 0 // Id of the radio we will transmit to.
 #define PIN_RADIO_CE 2
 #define PIN_RADIO_CSN 3
+
+#define INTERVAL_VALUE_COUNT 16
+#define INTERVAL_EEPROM_ADDRESS 0
 
 OneWire oneWire(TEMPSENSORPIN); 
 DallasTemperature sensors(&oneWire);
@@ -36,8 +47,8 @@ RadioPacket _radioData;
 class Task {
     unsigned long previous_millis;
     unsigned long current_millis;
-    unsigned long interval_values[16] = {1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000, 675000, 1012500, 1350000, 2025000, 4725000, 9450000};
-    int interval_pointer = 0;
+    unsigned long interval_values[INTERVAL_VALUE_COUNT] = {1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000, 675000, 1012500, 1350000, 2025000, 4725000, 9450000};
+    uint8_t interval_pointer = 0;
     void (*fun)();
     String func_name;
 
@@ -47,15 +58,26 @@ class Task {
     Task(void (*func)(), int ival, String name) {
       fun = func;
       interval = ival;
+      if (String("temp") == name){
+        EEPROM.get(INTERVAL_EEPROM_ADDRESS, interval_pointer);
+        interval_pointer %= INTERVAL_VALUE_COUNT;
+        interval_pointer--;
+        if (interval_pointer == -1){
+          interval_pointer = 15;
+        }      
+        change_interval();
+      }
       previous_millis = 0;
       func_name = name;
       return;
     }
 
     void change_interval(void){
-      interval_pointer = ++interval_pointer % 16;
+      interval_pointer = ++interval_pointer % INTERVAL_VALUE_COUNT;
       interval = interval_values[interval_pointer];
       Serial.println("New interval: " + String(interval));
+      Serial.println("New intervalp: " + String(interval_pointer));
+      EEPROM.update(INTERVAL_EEPROM_ADDRESS, interval_pointer);
     }
     
     run() {
@@ -86,6 +108,12 @@ class TemperatureArray {
     }
 
   void add(float temp){
+    if (!init_done){
+      for (int i=0; i < count; i++){
+        values[i] = temp;
+      }
+      init_done = true;
+    }
     values[current] = temp;
     current = ++current % count;
     float temp_min = values[0];
@@ -97,16 +125,9 @@ class TemperatureArray {
     minimum = temp_min;
     maximum = temp_max;
     isDrawn = false;
-    if (!init_done){
-      for (int i=0; i < count; i++){
-        values[i] = temp;
-      }
-      init_done = true;
-    }
   }
 
   unsigned int get_val(int position){
-    if (!init_done) return display_height - 1;
     float delta = maximum - minimum;
     float delta_per_pixel;
     if (delta != 0.0){ 
@@ -180,10 +201,6 @@ Task tbutton = Task(*readButton, 50, "button");
 
 bool ledState = false;
 
-void drawYLine(int ypos){
-    u8g2.drawHLine(0, ypos, 128);  
-}
-
 void setup() {
   Serial.begin(115200);
   
@@ -202,6 +219,7 @@ void setup() {
   
   pinMode(BUTTONPIN, INPUT_PULLUP);
   pinMode(LEDPIN, OUTPUT);
+  readTemperature();
 }
 
 float duration = 0;
