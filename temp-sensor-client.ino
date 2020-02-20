@@ -6,7 +6,6 @@
 #include <EEPROM.h>
 
 // TODO
-// performance draw, cache max, min
 // -1 value bug, not visible
 // send struct includes: interval
 // sub interval measuring
@@ -14,6 +13,7 @@
 
 #define TEMPSENSORPIN 4
 #define TEMPRESOLUTION 12
+#define FLOAT_LENGTH 1
 #define BUTTONPIN 7
 #define LEDPIN 6
 
@@ -38,7 +38,6 @@ struct RadioPacket // Any packet up to 32 bytes can be sent.
 {
     uint8_t FromRadioId;
     uint32_t OnTimeMillis;
-    uint32_t FailedTxCount;
 };
 
 NRFLite _radio;
@@ -57,7 +56,6 @@ class Task {
 
     Task(void (*func)(), int ival, String name) {
       fun = func;
-      interval = ival;
       if (String("temp") == name){
         EEPROM.get(INTERVAL_EEPROM_ADDRESS, interval_pointer);
         interval_pointer %= INTERVAL_VALUE_COUNT;
@@ -67,6 +65,9 @@ class Task {
         }      
         change_interval();
       }
+      else{
+        interval = ival;
+      }
       previous_millis = 0;
       func_name = name;
       return;
@@ -75,8 +76,7 @@ class Task {
     void change_interval(void){
       interval_pointer = ++interval_pointer % INTERVAL_VALUE_COUNT;
       interval = interval_values[interval_pointer];
-      Serial.println("New interval: " + String(interval));
-      Serial.println("New intervalp: " + String(interval_pointer));
+      Serial.println("Interval: " + String(interval) + "IntervalPointer: " + String(interval_pointer));
       EEPROM.update(INTERVAL_EEPROM_ADDRESS, interval_pointer);
     }
     
@@ -93,17 +93,21 @@ class Task {
 
 class TemperatureArray {
    public:
-     unsigned int current = 0;
+     uint8_t current = 0;
      float minimum = 10000;
      float maximum= -10000;
-     const static unsigned int count = 128;
+     const static uint8_t count = 128;
      float values[count] = {};
      bool init_done = false;
      bool isDrawn = false;
-     unsigned int display_height;
+     uint8_t display_height;
+     uint8_t header_height;
+     float delta;
+     float delta_per_pixel;
     
-    TemperatureArray(unsigned int height){
-      display_height = height;
+    TemperatureArray(uint8_t dheight, uint8_t hheight){
+      display_height = dheight;
+      header_height = hheight;
       return;
     }
 
@@ -116,26 +120,23 @@ class TemperatureArray {
     }
     values[current] = temp;
     current = ++current % count;
-    float temp_min = values[0];
-    float temp_max = values[0];
-    for (int i=0;i<128;i++){
-      if (values[i] < temp_min) temp_min = values[i];
-      if (values[i] > temp_max) temp_max = values[i];
+    minimum = values[0];
+    maximum = values[0];
+    for (uint8_t i=1;i<128;i++){
+      if (values[i] < minimum) minimum = values[i];
+      if (values[i] > maximum) maximum = values[i];
     }
-    minimum = temp_min;
-    maximum = temp_max;
-    isDrawn = false;
-  }
-
-  unsigned int get_val(int position){
-    float delta = maximum - minimum;
-    float delta_per_pixel;
+    delta = maximum - minimum;
     if (delta != 0.0){ 
-      delta_per_pixel = delta / (display_height - 16);
+      delta_per_pixel = delta / (display_height - header_height);
     }
     else {
       delta_per_pixel = 1;
     }
+    isDrawn = false;
+  }
+
+  unsigned int get_val(uint8_t position){
     float t;
     if (values[position] ==  minimum){
       t = 1;
@@ -148,26 +149,14 @@ class TemperatureArray {
 
 };
 
-TemperatureArray temperatureArray = TemperatureArray(64);
+TemperatureArray temperatureArray = TemperatureArray(64, 16);
 
 void readTemperature(void){
   sensors.requestTemperatures(); 
   temperatureArray.add(sensors.getTempCByIndex(0));
 
-  // send data
   _radioData.OnTimeMillis = (int)(sensors.getTempCByIndex(0)*1000);
-  if (_radio.send(DESTINATION_RADIO_ID, &_radioData, sizeof(_radioData))) // Note how '&' must be placed in front of the variable name.
-  {
-      Serial.println("...Success");
-      digitalWrite(LEDPIN, LOW);
-  }
-  else
-  {
-      Serial.println("...Failed");
-      digitalWrite(LEDPIN, HIGH);
-      _radioData.FailedTxCount++;
-  }
-  
+  digitalWrite(LEDPIN, !_radio.send(DESTINATION_RADIO_ID, &_radioData, sizeof(_radioData)));
 }
 
 Task ttemp = Task(*readTemperature, 1000, "temp");
@@ -240,11 +229,11 @@ void loop() {
     u8g2.firstPage();
     do {
       u8g2.setCursor(0, 6);
-      u8g2.print("H " + String(temperatureArray.maximum, 4)); 
+      u8g2.print("H " + String(temperatureArray.maximum, FLOAT_LENGTH)); 
       u8g2.setCursor(0, 14);
-      u8g2.print("L " + String(temperatureArray.minimum, 4)); 
-      u8g2.setCursor(54, 6);
-      u8g2.print(String(temperatureArray.values[(temperatureArray.current + 127)%128], 4)); 
+      u8g2.print("L " + String(temperatureArray.minimum, FLOAT_LENGTH)); 
+      u8g2.setCursor(100, 6);
+      u8g2.print(String(temperatureArray.values[(temperatureArray.current + 127)%128], FLOAT_LENGTH)); 
       if (ttemp.interval < 60000){
         duration = ttemp.interval / 1000.0;
         text = "s"; 
