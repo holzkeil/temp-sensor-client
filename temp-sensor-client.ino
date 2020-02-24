@@ -55,12 +55,12 @@ class Task {
     uint32_t previousMillis;
     uint32_t currentMillis;
     uint32_t intervalValues[INTERVAL_VALUE_COUNT] = {1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000, 675000, 1012500, 1350000, 2025000, 4725000, 9450000};
-    int8_t intervalPointer = 0;
     void (*functionPointer)();
     String functionName;
 
   public:
     uint32_t interval;
+    int8_t intervalPointer = 0;
 
     Task(void (*function)(), uint32_t ival, String name) {
       functionPointer = function;
@@ -80,14 +80,40 @@ class Task {
       intervalPointer = ++intervalPointer % INTERVAL_VALUE_COUNT;
       interval = intervalValues[intervalPointer];
       radioData.interval = interval;
-      Serial.println("Interval: " + String(interval) + "IntervalPointer: " + String(intervalPointer));
-      EEPROM.update(INTERVAL_EEPROM_ADDRESS, intervalPointer);
+      Serial.println("I" + String(interval) + " IP" + String(intervalPointer));
     }
     
     run() {
       currentMillis = millis();
       if (currentMillis - previousMillis >= interval) {
-        Serial.println("Running function '" + functionName + "' after: " + String(currentMillis - previousMillis));
+        Serial.println(functionName + ": " + String(currentMillis - previousMillis));
+        previousMillis = currentMillis;
+        functionPointer();
+      }
+    }
+};
+
+class SimpleTask {
+    uint32_t previousMillis;
+    uint32_t currentMillis;
+    void (*functionPointer)();
+    String functionName;
+    uint32_t interval;
+
+   public:
+
+    SimpleTask(void (*function)(), uint32_t ival, String name) {
+      functionPointer = function;
+      interval = ival;
+      previousMillis = 0;
+      functionName = name;
+      return;
+    }
+    
+    run() {
+      currentMillis = millis();
+      if (currentMillis - previousMillis >= interval) {
+        Serial.println(functionName + ": " + String(currentMillis - previousMillis));
         previousMillis = currentMillis;
         functionPointer();
       }
@@ -169,7 +195,19 @@ void readButton() {
   buttonOldState = buttonNewState;
 }
 
-Task taskReadButton = Task(*readButton, 50, "button");
+SimpleTask taskReadButton = SimpleTask(*readButton, 50, "button");
+
+uint32_t oldIntervalPointer = taskReadTemperature.intervalPointer;
+
+void updateEeprom() {
+  if (oldIntervalPointer != taskReadTemperature.intervalPointer){
+    Serial.println("N" + String(taskReadTemperature.intervalPointer) + " O" + String(oldIntervalPointer));
+    EEPROM.update(INTERVAL_EEPROM_ADDRESS, taskReadTemperature.intervalPointer);
+    oldIntervalPointer = taskReadTemperature.intervalPointer;
+  }
+}
+
+SimpleTask taskUpdateEeprom = SimpleTask(*updateEeprom, 60000, "eeprom");
 
 void setup() {
   Serial.begin(SERIAL_SPEED);
@@ -197,6 +235,7 @@ String text;
 
 void loop() {
   taskReadTemperature.run();
+  taskUpdateEeprom.run();
   taskReadButton.run();
   if (buttonShortPress || buttonLongPress){
     Serial.println("Button press");
