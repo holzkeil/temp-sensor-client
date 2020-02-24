@@ -6,7 +6,6 @@
 #include <EEPROM.h>
 
 // TODO
-// send struct includes: interval
 // sub interval measuring
 // display show last avarage, interval counter, and current sub interval
 
@@ -45,24 +44,25 @@ U8G2_SSD1306_128X64_VCOMH0_1_4W_HW_SPI u8g2(U8G2_R0, PIN_OLED_CHIP_SELECT_DS, PI
 struct RadioData
 {
     uint8_t sourceRadioId;
-    uint32_t OnTimeMillis;
+    float temperature;
+    uint32_t interval;
 };
 
 NRFLite radio;
 RadioData radioData;
 
 class Task {
-    unsigned long previousMillis;
-    unsigned long currentMillis;
-    unsigned long intervalValues[INTERVAL_VALUE_COUNT] = {1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000, 675000, 1012500, 1350000, 2025000, 4725000, 9450000};
+    uint32_t previousMillis;
+    uint32_t currentMillis;
+    uint32_t intervalValues[INTERVAL_VALUE_COUNT] = {1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000, 675000, 1012500, 1350000, 2025000, 4725000, 9450000};
     int8_t intervalPointer = 0;
     void (*functionPointer)();
     String functionName;
 
   public:
-    unsigned long interval;
+    uint32_t interval;
 
-    Task(void (*function)(), int ival, String name) {
+    Task(void (*function)(), uint32_t ival, String name) {
       functionPointer = function;
       if (String("temp") == name){
         EEPROM.get(INTERVAL_EEPROM_ADDRESS, intervalPointer);
@@ -79,6 +79,7 @@ class Task {
     void change_interval(){
       intervalPointer = ++intervalPointer % INTERVAL_VALUE_COUNT;
       interval = intervalValues[intervalPointer];
+      radioData.interval = interval;
       Serial.println("Interval: " + String(interval) + "IntervalPointer: " + String(intervalPointer));
       EEPROM.update(INTERVAL_EEPROM_ADDRESS, intervalPointer);
     }
@@ -101,7 +102,6 @@ class TemperatureArray {
      float values[DISPLAY_WIDTH] = {};
      bool initDone = false;
      bool mustDraw = true;
-     float delta;
      float deltaPerPixel;
     
     TemperatureArray(){
@@ -110,7 +110,7 @@ class TemperatureArray {
 
   void add(float temp){
     if (!initDone){
-      for (int i=0; i < DISPLAY_WIDTH; i++){
+      for (uint8_t i=0; i < DISPLAY_WIDTH; i++){
         values[i] = temp;
       }
       initDone = true;
@@ -119,29 +119,16 @@ class TemperatureArray {
     current = ++current % DISPLAY_WIDTH;
     minimum = values[0];
     maximum = values[0];
-    for (uint8_t i=1;i<DISPLAY_WIDTH;i++){
+    for (uint8_t i=1; i < DISPLAY_WIDTH; i++){
       if (values[i] < minimum) minimum = values[i];
       if (values[i] > maximum) maximum = values[i];
     }
-    delta = maximum - minimum;
-    if (delta != 0.0){ 
-      deltaPerPixel = delta / (DISPLAY_HEIGHT - DISPLAY_HEADER);
-    }
-    else {
-      deltaPerPixel = 1.0;
-    }
+    deltaPerPixel = (maximum - minimum) / (DISPLAY_HEIGHT - DISPLAY_HEADER);
     mustDraw = true;
   }
 
-  unsigned int get_val(uint8_t position){
-    float t;
-    if (values[position] ==  minimum){
-      t = 1;
-    }
-    else{
-      t = (values[position] - minimum) / deltaPerPixel;
-    }
-    return DISPLAY_HEIGHT - ceil(t);
+  uint8_t get_val(uint8_t position){
+    return DISPLAY_HEIGHT - ceil(values[position] ==  minimum ? 1 : (values[position] - minimum) / deltaPerPixel);
   }
 
 };
@@ -149,28 +136,28 @@ class TemperatureArray {
 TemperatureArray temperatureArray = TemperatureArray();
 
 void readTemperature(void){
-  sensors.requestTemperatures(); 
-  temperatureArray.add(sensors.getTempCByIndex(0));
-
-  radioData.OnTimeMillis = (int)(sensors.getTempCByIndex(0)*1000);
+  sensors.requestTemperatures();
+  float temperature = sensors.getTempCByIndex(0);
+  temperatureArray.add(temperature);
+  radioData.temperature = temperature;
   digitalWrite(PIN_LED, !radio.send(DESTINATION_RADIO_ID, &radioData, sizeof(radioData)));
 }
 
 Task taskReadTemperature = Task(*readTemperature, 1000, "temp");
 
-int buttonOldState = true;
+bool buttonOldState = true;
 bool buttonShortPress = false;
 bool buttonLongPress = false;
-unsigned long buttonTimer = 0;
+uint32_t buttonTimer = 0;
 
 void readButton() {
-  int buttonNewState = digitalRead(PIN_BUTTON);
+  bool buttonNewState = digitalRead(PIN_BUTTON);
   if (buttonNewState != buttonOldState) {
     if (buttonNewState == LOW) {
       buttonTimer = millis();
     }
     else {
-      unsigned long buttonCurrentMillis = millis();
+      uint32_t buttonCurrentMillis = millis();
       if (buttonCurrentMillis - buttonTimer >= LONG_PRESS_THRESHOLD) {
         buttonLongPress = true;
       }
@@ -242,8 +229,8 @@ void loop() {
       }
       u8g2.setCursor(54, 14);
       u8g2.print(String(duration) + text + " " + String((int)(duration*DISPLAY_WIDTH)) + text);
-      for (int i=0; i<DISPLAY_WIDTH;i++){
-        unsigned int val = temperatureArray.get_val((temperatureArray.current - i + 127)%DISPLAY_WIDTH);
+      for (uint8_t i=0; i < DISPLAY_WIDTH; i++){
+        uint8_t val = temperatureArray.get_val((temperatureArray.current - i + 127)%DISPLAY_WIDTH);
         u8g2.drawPixel(127 - i, val);
       }
     } while ( u8g2.nextPage() );
