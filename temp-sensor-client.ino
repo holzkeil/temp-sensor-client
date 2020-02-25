@@ -213,7 +213,7 @@ void setup() {
   Serial.begin(SERIAL_SPEED);
   
   if (!radio.init(SOURCE_RADIO_ID, PIN_RADIO_CE, PIN_RADIO_CSN)){
-    Serial.println("Cannot communicate with radio");
+    Serial.println("Radio Error");
     while (1);
   }  
   radioData.sourceRadioId = SOURCE_RADIO_ID;
@@ -269,8 +269,8 @@ void loop() {
       u8g2.setCursor(54, 14);
       u8g2.print(String(duration) + text + " " + String((int)(duration*DISPLAY_WIDTH)) + text);
       for (uint8_t i=0; i < DISPLAY_WIDTH; i++){
-        uint8_t val = temperatureArray.get_val((temperatureArray.current - i + 127)%DISPLAY_WIDTH);
-        u8g2.drawPixel(127 - i, val);
+        uint8_t val = temperatureArray.get_val((DISPLAY_WIDTH - 1 - i + temperatureArray.current)%DISPLAY_WIDTH);
+        u8g2.drawPixel(DISPLAY_WIDTH - 1 - i, val);
       }
     } while ( u8g2.nextPage() );
     temperatureArray.mustDraw = false;
