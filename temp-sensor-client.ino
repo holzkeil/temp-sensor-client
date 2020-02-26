@@ -35,6 +35,7 @@
 #define DISPLAY_WIDTH 128
 #define DISPLAY_HEIGHT 64
 #define DISPLAY_HEADER 16
+#define DISPLAY_FONT u8g2_font_5x8_tf
 
 #define SERIAL_SPEED 115200
 
@@ -172,6 +173,7 @@ void readTemperature(void){
   float temperature = sensors.getTempCByIndex(0);
   temperatureArray.add(temperature);
   radioData.temperature = temperature;
+  Serial.println("T " + String(temperature, 4));
   digitalWrite(PIN_LED, !radio.send(DESTINATION_RADIO_ID, &radioData, sizeof(radioData)));
 }
 
@@ -227,7 +229,7 @@ void setup() {
   sensors.setResolution(TEMPRESOLUTION);
   
   u8g2.begin();
-  u8g2.setFont(u8g2_font_5x8_tf);
+  u8g2.setFont(DISPLAY_FONT);
   u8g2.setColorIndex(1);
   
   pinMode(PIN_BUTTON, INPUT_PULLUP);
