@@ -20,6 +20,11 @@
 #define TASK_INTERVAL_EEPROM 30000
 #define TASK_INTERVAL_TEMP_EEPROM_ADDRESS 0
 
+#define TASK_NAME_BUTTON "butn"
+#define TASK_NAME_TEMP "temp"
+#define TASK_NAME_RADIO "rdio"
+#define TASK_NAME_EEPROM "eprm"
+
 #define TEMP_SENSOR_PIN 4
 #define TEMP_SENSOR_RESOLUTION 12  // 12: highest, 0.0625 to 9: lowest, 0.5
 #define TEMP_SENSOR_STRING_DECIMALS 2
@@ -35,13 +40,19 @@
 #define RADIO_PIN_CSN 3
 // By default, 'init' configures the radio to use a 2MBPS bitrate on channel 100 (channels 0-125 are valid).
 // Both the RX and TX radios must have the same bitrate and channel to communicate with each other.
-#define RADIO_SPEED NRFLite::BITRATE2MBPS // NRFLite::BITRATE250KBPS NRFLite::BITRATE1MBPS NRFLite::BITRATE2MBPS
+//#define RADIO_SPEED NRFLite::BITRATE250KBPS
+//#define RADIO_SPEED NRFLite::BITRATE1MBPS
+#define RADIO_SPEED NRFLite::BITRATE2MBPS
 #define RADIO_CHANNEL 100 // 0 - 125
-
-// totalDuration        128s, 256s, 640s,21:20m,   32m,42:40m,   64m, 2:08h,  4:16h,  6:24h, 10:40h, 21:20h,     1d,    1.5d,      2d,      3d,      7d,     14d
-//singleDuration          1s,   2s,   5s,   10s,   15s,   20s,   30s,    1m,     2m,     3m,     5m,    10m, 11:15m, 16.875m,   22.5m,  33.75m,  78.75m,  157.5m
-#define INTERVAL_VALUES 1000, 2000, 5000, 10000, 15000, 20000, 30000, 60000, 120000, 180000, 300000, 600000, 675000, 1012500, 1350000, 2025000, 4725000, 9450000
-#define INTERVAL_VALUE_COUNT 18
+#define RADIO_LED_ON_ERROR true
+ 
+// these values can be selected with the one and only button
+// it is the time each pixel represents the temperature
+// totalDuration        128s, 256s, 640s,21:20m,   32m,42:40m,   64m, 2:08h,  4:16h,  6:24h, 10:40h,    12h, 21:20h,     1d,    1.5d,      2d,      3d,      5d       7d,     10d      14d       21d
+//singleDuration          1s,   2s,   5s,   10s,   15s,   20s,   30s,    1m,     2m,     3m,     5m,  5:38m,    10m, 11:15m, 16.875m,   22.5m,  33.75m,  56:15m   78.75m,    112m,  157.5m     3:56h
+#define INTERVAL_VALUES 1000, 2000, 5000, 10000, 15000, 20000, 30000, 60000, 120000, 180000, 300000, 337500, 600000, 675000, 1012500, 1350000, 2025000, 3375000, 4725000, 6750000, 9450000, 14175000
+#define INTERVAL_VALUE_COUNT 22
+// intervals greater that this will be executed every this value
 #define INTERVAL_MAX_STEP_MILLIS 5000
 
 #define DISPLAY_PIN_CHIP_SELECT_DS 10
@@ -94,7 +105,7 @@ class Task {
     run() {
       currentMillis = millis();
       if (currentMillis - previousMillis >= interval) {
-        if (functionName != "butn" || TASK_DEBUG_BUTTON){
+        if (functionName != TASK_NAME_BUTTON || TASK_DEBUG_BUTTON){
           Serial.println(functionName + ": " + String(currentMillis - previousMillis));
         }
         previousMillis = currentMillis;
@@ -145,7 +156,7 @@ class ValueGraphArray {
     }
     
     deltaPerPixel = maximum == minimum ? 1 : (maximum - minimum) / (DISPLAY_HEIGHT - DISPLAY_HEADER);
-    Serial.println("DDP " + String(deltaPerPixel, 6));
+    Serial.println("DPP " + String(deltaPerPixel, 6));
     mustDraw = true;
   }
 
@@ -207,7 +218,7 @@ void readTemperature(void){
   Serial.println("T " + String(temperature, 4));
 }
 
-Task taskReadTemperature = Task(*readTemperature, TASK_INTERVAL_TEMP, "temp");
+Task taskReadTemperature = Task(*readTemperature, TASK_INTERVAL_TEMP, TASK_NAME_TEMP);
 
 //////////////////////////////////////////////
 // Read Button Press Variables and Function //
@@ -239,17 +250,14 @@ void readButton() {
   buttonOldState = buttonNewState;
 }
 
-Task taskReadButton = Task(*readButton, TASK_INTERVAL_BUTTON, "butn");
+Task taskReadButton = Task(*readButton, TASK_INTERVAL_BUTTON, TASK_NAME_BUTTON);
 
 //////////////////////////////////////////
 // Update EEPROM Variables and Function //
 //////////////////////////////////////////
 
-const uint32_t intervalValues[INTERVAL_VALUE_COUNT] = {INTERVAL_VALUES};
 int8_t intervalPointer;
-uint32_t interval;
-
-uint32_t oldIntervalPointer = intervalPointer;
+int8_t oldIntervalPointer;
 
 void updateEeprom() {
   if (oldIntervalPointer != intervalPointer){
@@ -258,11 +266,14 @@ void updateEeprom() {
   }
 }
 
-Task taskUpdateEeprom = Task(*updateEeprom, TASK_INTERVAL_EEPROM, "eprm");
+Task taskUpdateEeprom = Task(*updateEeprom, TASK_INTERVAL_EEPROM, TASK_NAME_EEPROM);
 
 ////////////////////////////////////////////
 // Change Interval Variables and Function //
 ////////////////////////////////////////////
+
+const uint32_t intervalValues[INTERVAL_VALUE_COUNT] = {INTERVAL_VALUES};
+uint32_t interval;
 
 void applyIntervalChanges(){
     interval = intervalValues[intervalPointer];
@@ -281,38 +292,43 @@ void sendRadioData(){
     radioData.intervalReadTempGlobal = interval;
     radioData.temperature = temperature;
     radioData.intervalReadTempTask = taskReadTemperature.interval;
-    digitalWrite(LED_PIN, !radio.send(RADIO_ID_DESTINATION, &radioData, sizeof(radioData)));
+    digitalWrite(LED_PIN, !radio.send(RADIO_ID_DESTINATION, &radioData, sizeof(radioData)) && RADIO_LED_ON_ERROR);
 }
 
-Task taskSendRadioData = Task(*sendRadioData, TASK_INTERVAL_RADIO, "rdio");
+Task taskSendRadioData = Task(*sendRadioData, TASK_INTERVAL_RADIO, TASK_NAME_RADIO);
 
 //////////////////////////////////
 // Main Variables and Functions //
 //////////////////////////////////
+
+#define SECOND 1000
+#define MINUTE 60000
+#define HOUR 3600000
+#define DAY 86400000
 
 String intervalToString(uint32_t interval){
   uint8_t value = 0;
   uint8_t decimal;
   String unit;
 
-  if (interval < 60000){
-    value = int(interval / 1000);
+  if (interval < MINUTE){
+    value = int(interval / SECOND);
     decimal = 0;
     unit = F("s"); 
   }
-  else if (interval < 3600000){
-    value = int(interval / 60000);
-    decimal = (interval - value * 60000) / 1000;
+  else if (interval < HOUR){
+    value = int(interval / MINUTE);
+    decimal = (interval - value * MINUTE) / SECOND;
     unit = F("m"); 
   }
-  else if (interval < 86400000){
-    value = int(interval / 3600000);
-    decimal = (interval - value * 3600000) / 60000;
+  else if (interval < DAY){
+    value = int(interval / HOUR);
+    decimal = (interval - value * HOUR) / MINUTE;
     unit = F("h"); 
   }
   else{
-    value = int(interval / 86400000);
-    decimal = (interval - value * 86400000) / 3600000;
+    value = int(interval / DAY);
+    decimal = (interval - value * DAY) / HOUR;
     unit = F("d"); 
   }
   String target = String(value);
@@ -329,7 +345,7 @@ void setup() {
   pinMode(LED_PIN, OUTPUT); 
 
   if (!radio.init(RADIO_ID_SOURCE, RADIO_PIN_CE, RADIO_PIN_CSN, RADIO_SPEED, RADIO_CHANNEL)){
-    digitalWrite(LED_PIN, HIGH);
+    digitalWrite(LED_PIN, RADIO_LED_ON_ERROR);
     while (1);
   }  
   radioData.sourceRadioId = RADIO_ID_SOURCE;
@@ -369,9 +385,16 @@ void loop() {
     do {
       display.setCursor(0, 6);
       String upperRow = "H " + String(temperatureArray.maximum, TEMP_SENSOR_STRING_DECIMALS);
-      upperRow += " " + String(temperatureArray.values[(temperatureArray.currentPosition+DISPLAY_WIDTH-1)%DISPLAY_WIDTH], TEMP_SENSOR_STRING_DECIMALS); 
-      upperRow += " " + String(temperatureArray.currentValue, TEMP_SENSOR_STRING_DECIMALS);
-      upperRow += " " + String(temperature, TEMP_SENSOR_STRING_DECIMALS);
+      if (temperatureArray.stepCount > 1){
+        upperRow += " " + String(temperatureArray.values[(temperatureArray.currentPosition + DISPLAY_WIDTH - 1) % DISPLAY_WIDTH], TEMP_SENSOR_STRING_DECIMALS); 
+        upperRow += " " + String(temperatureArray.currentValue, TEMP_SENSOR_STRING_DECIMALS);
+        upperRow += " " + String(temperature, TEMP_SENSOR_STRING_DECIMALS);
+      }
+      else{
+        upperRow += " " + String(temperatureArray.values[(temperatureArray.currentPosition + DISPLAY_WIDTH - 3) % DISPLAY_WIDTH], TEMP_SENSOR_STRING_DECIMALS); 
+        upperRow += " " + String(temperatureArray.values[(temperatureArray.currentPosition + DISPLAY_WIDTH - 2) % DISPLAY_WIDTH], TEMP_SENSOR_STRING_DECIMALS); 
+        upperRow += " " + String(temperatureArray.values[(temperatureArray.currentPosition + DISPLAY_WIDTH - 1) % DISPLAY_WIDTH], TEMP_SENSOR_STRING_DECIMALS); 
+      }
       display.print(upperRow); 
       
       display.setCursor(0, 14);
