@@ -15,13 +15,15 @@
 ///////////////////////////////////
 
 #define TASK_INTERVAL_BUTTON 50
-#define TASK_INTERVAL_TEMP 1000
+#define TASK_INTERVAL_REQUESTTEMP 1000
+#define TASK_INTERVAL_READTEMP 200
 #define TASK_INTERVAL_RADIO 10000
 #define TASK_INTERVAL_EEPROM 30000
-#define TASK_INTERVAL_TEMP_EEPROM_ADDRESS 0
+#define TASK_INTERVAL_REQUESTTEMP_EEPROM_ADDRESS 0
 
 #define TASK_NAME_BUTTON "butn"
-#define TASK_NAME_TEMP "temp"
+#define TASK_NAME_REQUESTTEMP "rqst"
+#define TASK_NAME_READTEMP "read"
 #define TASK_NAME_RADIO "rdio"
 #define TASK_NAME_EEPROM "eprm"
 
@@ -158,7 +160,6 @@ class ValueGraphArray {
     }
     
     deltaPerPixel = maximum == minimum ? 1 : (maximum - minimum) / (DISPLAY_HEIGHT - DISPLAY_HEADER);
-    Serial.println("DPP " + String(deltaPerPixel, 6));
     mustDraw = true;
   }
 
@@ -204,23 +205,37 @@ struct RadioData
 NRFLite radio;
 RadioData radioData;
 
-/////////////////////////////////////////////
-// Read Temperature Variables and Function //
-/////////////////////////////////////////////
+/////////////////////////////////////////////////////////
+// Request and Read Temperature Variables and Function //
+/////////////////////////////////////////////////////////
 
 OneWire oneWire(TEMP_SENSOR_PIN); 
 DallasTemperature sensors(&oneWire);
 ValueGraphArray temperatureArray = ValueGraphArray();
 float temperature;
+bool tempIsRequested = false;
+uint32_t tempReadTime;
 
-void readTemperature(void){
-  sensors.requestTemperatures();
-  temperature = sensors.getTempCByIndex(0);
-  temperatureArray.add(temperature);
-  Serial.println("T " + String(temperature, 4));
+void requestTemperature(void){
+  if (!tempIsRequested){
+    sensors.requestTemperatures();
+    tempReadTime = millis() + (750 / (1 << (12 - TEMP_SENSOR_RESOLUTION)));
+    tempIsRequested = true;
+  }
 }
 
-Task taskReadTemperature = Task(*readTemperature, TASK_INTERVAL_TEMP, TASK_NAME_TEMP);
+Task taskRequestTemperature = Task(*requestTemperature, TASK_INTERVAL_REQUESTTEMP, TASK_NAME_REQUESTTEMP);
+
+void readTemperature(void){
+  if (tempIsRequested && (millis() >= tempReadTime)){
+    temperature = sensors.getTempCByIndex(0);
+    temperatureArray.add(temperature);
+    Serial.println("T " + String(temperature, 4));
+    tempIsRequested = false;
+  }
+}
+
+Task taskReadTemperature = Task(*readTemperature, TASK_INTERVAL_READTEMP, TASK_NAME_READTEMP);
 
 //////////////////////////////////////////////
 // Read Button Press Variables and Function //
@@ -264,7 +279,7 @@ int8_t oldIntervalPointer;
 void updateEeprom() {
   if (oldIntervalPointer != intervalPointer){
     Serial.println("O " + String(oldIntervalPointer) + " -> N " + String(intervalPointer));
-    EEPROM.update(TASK_INTERVAL_TEMP_EEPROM_ADDRESS, oldIntervalPointer = intervalPointer);
+    EEPROM.update(TASK_INTERVAL_REQUESTTEMP_EEPROM_ADDRESS, oldIntervalPointer = intervalPointer);
   }
 }
 
@@ -281,8 +296,8 @@ void applyIntervalChanges(){
     interval = intervalValues[intervalPointer];
     Serial.println("I" + String(interval) + " IP" + String(intervalPointer));
     temperatureArray.change_interval(interval > INTERVAL_MAX_STEP_MILLIS ? interval / INTERVAL_MAX_STEP_MILLIS : 1);
-    taskReadTemperature.interval = min(interval, INTERVAL_MAX_STEP_MILLIS);
-    taskReadTemperature.reset();
+    taskRequestTemperature.interval = min(interval, INTERVAL_MAX_STEP_MILLIS);
+    taskRequestTemperature.reset();
     taskUpdateEeprom.reset();
 }
 
@@ -293,7 +308,7 @@ void applyIntervalChanges(){
 void sendRadioData(){
     radioData.intervalReadTempGlobal = interval;
     radioData.temperature = temperature;
-    radioData.intervalReadTempTask = taskReadTemperature.interval;
+    radioData.intervalReadTempTask = taskRequestTemperature.interval;
     digitalWrite(LED_PIN, !radio.send(RADIO_ID_DESTINATION, &radioData, sizeof(radioData)) && RADIO_LED_ON_ERROR);
 }
 
@@ -355,20 +370,22 @@ void setup() {
   
   sensors.begin();
   sensors.setResolution(TEMP_SENSOR_RESOLUTION);
+  sensors.setWaitForConversion(false);
   
   display.begin();
   display.setFont(DISPLAY_FONT);
   display.setColorIndex(1);
 
-  EEPROM.get(TASK_INTERVAL_TEMP_EEPROM_ADDRESS, intervalPointer);
+  EEPROM.get(TASK_INTERVAL_REQUESTTEMP_EEPROM_ADDRESS, intervalPointer);
   intervalPointer %= INTERVAL_VALUE_COUNT;
   applyIntervalChanges();
  
-  readTemperature();
+  requestTemperature();
 }
 
 void loop() {
   taskSendRadioData.run();
+  taskRequestTemperature.run();
   taskReadTemperature.run();
   taskUpdateEeprom.run();
   taskReadButton.run();
