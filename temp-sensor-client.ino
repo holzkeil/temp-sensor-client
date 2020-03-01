@@ -48,8 +48,8 @@
  
 // these values can be selected with the one and only button
 // it is the time each pixel represents the temperature
-// totalDuration        128s, 256s, 640s,21:20m,   32m,42:40m,   64m, 2:08h,  4:16h,  6:24h, 10:40h,    12h, 21:20h,     1d,    1.5d,      2d,      3d,      5d       7d,     10d      14d       21d
-//singleDuration          1s,   2s,   5s,   10s,   15s,   20s,   30s,    1m,     2m,     3m,     5m,  5:38m,    10m, 11:15m, 16.875m,   22.5m,  33.75m,  56:15m   78.75m,    112m,  157.5m     3:56h
+// totalDuration        128s, 256s, 640s,21:20m,   32m,42:40m,   64m, 2:08h,  4:16h,  6:24h, 10:40h,    12h, 21:20h,     1d,    1.5d,      2d,      3d,      5d,      7d,     10d,     14d,      21d
+//singleDuration          1s,   2s,   5s,   10s,   15s,   20s,   30s,    1m,     2m,     3m,     5m,  5:38m,    10m, 11:15m, 16.875m,   22.5m,  33.75m,  56:15m,  78.75m,    112m,  157.5m,    3:56h
 #define INTERVAL_VALUES 1000, 2000, 5000, 10000, 15000, 20000, 30000, 60000, 120000, 180000, 300000, 337500, 600000, 675000, 1012500, 1350000, 2025000, 3375000, 4725000, 6750000, 9450000, 14175000
 #define INTERVAL_VALUE_COUNT 22
 // intervals greater that this will be executed every this value
@@ -74,6 +74,8 @@
 
 ///////////////////////////////////////////////////
 // TODO
+// request temperature async
+// https://forum.arduino.cc/index.php?topic=157137.msg1177915#msg1177915
 ///////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////
@@ -331,8 +333,6 @@ String intervalToString(uint32_t interval){
     decimal = (interval - value * DAY) / HOUR;
     unit = F("d"); 
   }
-  String target = String(value);
-  target += String(decimal);
   return String(value) + ((decimal > 0) ? (":" + String(decimal)) : "") + unit;
 }
 
