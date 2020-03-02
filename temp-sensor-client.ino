@@ -1,3 +1,7 @@
+///////////////////////////////////////////////////
+// TODO
+///////////////////////////////////////////////////
+
 //////////////
 // Includes //
 //////////////
@@ -73,12 +77,6 @@
 #define SERIAL_SPEED 115200
 
 #define TASK_DEBUG_BUTTON false
-
-///////////////////////////////////////////////////
-// TODO
-// request temperature async
-// https://forum.arduino.cc/index.php?topic=157137.msg1177915#msg1177915
-///////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////
 // Task Class that allows pseudo parallelization //
@@ -162,7 +160,11 @@ class ValueGraphArray {
     deltaPerPixel = maximum == minimum ? 1 : (maximum - minimum) / (DISPLAY_HEIGHT - DISPLAY_HEADER);
     mustDraw = true;
   }
-
+  
+  uint8_t y(uint8_t position){
+    return DISPLAY_HEIGHT - max(1, (values[position] - minimum) / deltaPerPixel);
+  }
+  
   void change_interval(uint32_t steps){
     stepCount = steps;
     if (currentStep > 0){
@@ -181,10 +183,6 @@ class ValueGraphArray {
       }
       initDone = true;
     }
-  }
-  
-  uint8_t get_y_position(uint8_t position){
-    return DISPLAY_HEIGHT - max(1, (values[position] - minimum) / deltaPerPixel);
   }
 };
 
@@ -423,7 +421,7 @@ void loop() {
       display.print(lowerRow);
       
       for (uint8_t i=0; i < DISPLAY_WIDTH; i++){
-        uint8_t y_position = temperatureArray.get_y_position((DISPLAY_WIDTH - i + temperatureArray.currentPosition)%DISPLAY_WIDTH);
+        uint8_t y_position = temperatureArray.y((DISPLAY_WIDTH - i + temperatureArray.currentPosition)%DISPLAY_WIDTH);
         display.drawPixel(DISPLAY_WIDTH - 1 - i, y_position);
       }
     } while (display.nextPage());
