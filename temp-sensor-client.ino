@@ -18,9 +18,9 @@
 // can be adjusted to your needs //
 ///////////////////////////////////
 
-#define TASK_INTERVAL_BUTTON 50
+#define TASK_INTERVAL_BUTTON 10
 #define TASK_INTERVAL_REQUESTTEMP 1000
-#define TASK_INTERVAL_READTEMP 200
+#define TASK_INTERVAL_READTEMP 10
 #define TASK_INTERVAL_RADIO 10000
 #define TASK_INTERVAL_EEPROM 30000
 #define TASK_INTERVAL_REQUESTTEMP_EEPROM_ADDRESS 0
@@ -36,7 +36,8 @@
 #define TEMP_SENSOR_STRING_DECIMALS 2
 
 #define BUTTON_PIN 7
-#define BUTTON_LONG_PRESS_THRESHOLD 1500
+#define BUTTON_LONG_PRESS_THRESHOLD 2000
+#define BUTTON_VERY_LONG_PRESS_THRESHOLD 5000
 
 #define LED_PIN 6
 
@@ -77,6 +78,7 @@
 #define SERIAL_SPEED 115200
 
 #define TASK_DEBUG_BUTTON false
+#define TASK_DEBUG_READTEMP false
 
 ///////////////////////////////////////////////////
 // Task Class that allows pseudo parallelization //
@@ -107,7 +109,7 @@ class Task {
     run() {
       currentMillis = millis();
       if (currentMillis - previousMillis >= interval) {
-        if (functionName != TASK_NAME_BUTTON || TASK_DEBUG_BUTTON){
+        if ((functionName != TASK_NAME_BUTTON || TASK_DEBUG_BUTTON) && (functionName != TASK_NAME_READTEMP || TASK_DEBUG_READTEMP)){
           Serial.println(functionName + ": " + String(currentMillis - previousMillis));
         }
         previousMillis = currentMillis;
@@ -243,6 +245,7 @@ bool buttonNewState = true;
 bool buttonOldState = true;
 bool buttonShortPress = false;
 bool buttonLongPress = false;
+bool buttonVeryLongPress = false;
 uint32_t buttonTimer = 0;
 uint32_t buttonCurrentMillis = 0;
 
@@ -254,7 +257,10 @@ void readButton() {
     }
     else {
       buttonCurrentMillis = millis();
-      if (buttonCurrentMillis - buttonTimer >= BUTTON_LONG_PRESS_THRESHOLD) {
+      if (buttonCurrentMillis - buttonTimer >= BUTTON_VERY_LONG_PRESS_THRESHOLD) {
+        buttonVeryLongPress = true;
+      }
+      else if (buttonCurrentMillis - buttonTimer >= BUTTON_LONG_PRESS_THRESHOLD) {
         buttonLongPress = true;
       }
       else {
@@ -350,6 +356,8 @@ String intervalToString(uint32_t interval){
 }
 
 DISPLAY_CONSTRUCTOR display(DISPLAY_ROTATION, DISPLAY_PIN_CHIP_SELECT_DS, DISPLAY_PIN_DATA_COMMAND, DISPLAY_PIN_RESET);
+uint32_t drawTime;
+uint32_t drawCount;
 
 void setup() {
   Serial.begin(SERIAL_SPEED);
@@ -375,7 +383,7 @@ void setup() {
   display.setColorIndex(1);
 
   EEPROM.get(TASK_INTERVAL_REQUESTTEMP_EEPROM_ADDRESS, intervalPointer);
-  intervalPointer %= INTERVAL_VALUE_COUNT;
+  oldIntervalPointer = intervalPointer %= INTERVAL_VALUE_COUNT;
   applyIntervalChanges();
  
   requestTemperature();
@@ -388,16 +396,24 @@ void loop() {
   taskUpdateEeprom.run();
   taskReadButton.run();
   
-  if (buttonShortPress || buttonLongPress){
+  if (buttonShortPress){
     intervalPointer = ++intervalPointer % INTERVAL_VALUE_COUNT;
     applyIntervalChanges();
     buttonShortPress = false;
+  }
+  if (buttonLongPress){
     buttonLongPress = false;
   }
+  if (buttonVeryLongPress){
+    buttonVeryLongPress = false;
+  }  
 
   if (temperatureArray.mustDraw){
+    drawTime = millis();
+    drawCount = 0;
     display.firstPage();
     do {
+      drawCount++;
       display.setCursor(0, 6);
       String upperRow = "H " + String(temperatureArray.maximum, TEMP_SENSOR_STRING_DECIMALS);
       if (temperatureArray.stepCount > 1){
@@ -417,14 +433,15 @@ void loop() {
       if (temperatureArray.stepCount > 1){
         lowerRow += " " + String(temperatureArray.currentStep) + "/" + String(temperatureArray.stepCount); 
       }
-      lowerRow += " " + intervalToString(interval) + " " + intervalToString(interval*DISPLAY_WIDTH);
+      lowerRow += " " + intervalToString(interval) + " " + intervalToString(interval * DISPLAY_WIDTH);
       display.print(lowerRow);
       
       for (uint8_t i=0; i < DISPLAY_WIDTH; i++){
-        uint8_t y_position = temperatureArray.y((DISPLAY_WIDTH - i + temperatureArray.currentPosition)%DISPLAY_WIDTH);
+        uint8_t y_position = temperatureArray.y((DISPLAY_WIDTH - i + temperatureArray.currentPosition) % DISPLAY_WIDTH);
         display.drawPixel(DISPLAY_WIDTH - 1 - i, y_position);
       }
     } while (display.nextPage());
     temperatureArray.mustDraw = false;
+    Serial.println("draw: " + String(millis() - drawTime) + " " + String(drawCount));
   }
 }
