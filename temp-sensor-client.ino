@@ -25,6 +25,9 @@
 #define TASK_INTERVAL_EEPROM 30000
 #define TASK_INTERVAL_REQUESTTEMP_EEPROM_ADDRESS 0
 
+#define TEMPERATURE_POSITION_EEPROM_ADDRESS 1
+#define TEMPERATURE_GRAPH_EEPROM_ADDRESS 2
+
 #define TASK_NAME_BUTTON "butn"
 #define TASK_NAME_REQUESTTEMP "rqst"
 #define TASK_NAME_READTEMP "read"
@@ -125,7 +128,6 @@ class Task {
 
 class ValueGraphArray {
   private:
-    bool initDone = false;
     float deltaPerPixel;
     
   public:
@@ -140,8 +142,6 @@ class ValueGraphArray {
     float currentValue = 0;
 
   void add(float value){
-    init(value);
-
     currentValue = (currentValue * currentStep++ + value) / currentStep;
     values[currentPosition] = currentValue;
     
@@ -178,12 +178,17 @@ class ValueGraphArray {
     mustDraw = true;
   }
 
-  void init(float value){
-    if (!initDone){
-      for (uint8_t i=0; i < DISPLAY_WIDTH; i++){
-        values[i] = value;
-      }
-      initDone = true;
+  void readHistory(){
+    EEPROM.get(TEMPERATURE_POSITION_EEPROM_ADDRESS, currentPosition);
+    for (uint8_t i=0; i<DISPLAY_WIDTH; i++){
+      EEPROM.get(TEMPERATURE_GRAPH_EEPROM_ADDRESS + i * sizeof(float), values[i]);
+    }
+  }
+  
+  void writeHistory(){
+    EEPROM.put(TEMPERATURE_POSITION_EEPROM_ADDRESS, currentPosition);
+    for (uint8_t i=0; i<DISPLAY_WIDTH; i++){
+      EEPROM.put(TEMPERATURE_GRAPH_EEPROM_ADDRESS + i * sizeof(float), values[i]);
     }
   }
 };
@@ -385,7 +390,8 @@ void setup() {
   EEPROM.get(TASK_INTERVAL_REQUESTTEMP_EEPROM_ADDRESS, intervalPointer);
   oldIntervalPointer = intervalPointer %= INTERVAL_VALUE_COUNT;
   applyIntervalChanges();
- 
+
+  temperatureArray.readHistory();
   requestTemperature();
 }
 
@@ -402,9 +408,11 @@ void loop() {
     buttonShortPress = false;
   }
   if (buttonLongPress){
+    temperatureArray.readHistory();
     buttonLongPress = false;
   }
   if (buttonVeryLongPress){
+    temperatureArray.writeHistory();
     buttonVeryLongPress = false;
   }  
 
