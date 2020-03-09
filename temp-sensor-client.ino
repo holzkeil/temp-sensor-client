@@ -3,7 +3,6 @@
 // compiler define selects I2C or SPI
 // compiler define turns NRF on/off
 // compiler define turns serial debugging on/off
-// leading zero at decimal
 // adjustable upper/lower line offset values
 // remove heavy string usage to save memory
 // draw line every full degree for better visualization, but not if eqaul min or max
@@ -96,12 +95,12 @@
 ///////////////////////////////////////////////////
 
 class Task {
-    uint32_t previousMillis;
     uint32_t currentMillis;
     void (*functionPointer)();
     String functionName;
 
   public:
+    uint32_t previousMillis;
     uint32_t interval;
 
     Task(void (*function)(), uint32_t new_interval, String name) {
@@ -112,10 +111,6 @@ class Task {
       return;
     }
 
-    reset(){
-      previousMillis = millis();
-    }
-    
     run() {
       currentMillis = millis();
       if (currentMillis - previousMillis >= interval) {
@@ -313,8 +308,7 @@ void applyIntervalChanges(){
     Serial.println("I" + String(interval) + " IP" + String(intervalPointer));
     temperatureArray.change_interval(interval > INTERVAL_MAX_STEP_MILLIS ? interval / INTERVAL_MAX_STEP_MILLIS : 1);
     taskRequestTemperature.interval = min(interval, INTERVAL_MAX_STEP_MILLIS);
-    taskRequestTemperature.reset();
-    taskUpdateEeprom.reset();
+    taskRequestTemperature.previousMillis = taskUpdateEeprom.previousMillis = millis();
 }
 
 ///////////////////////////////////////////
@@ -457,6 +451,7 @@ void loop() {
         uint8_t y_position = temperatureArray.y((DISPLAY_WIDTH - i + temperatureArray.currentPosition) % DISPLAY_WIDTH);
         display.drawPixel(DISPLAY_WIDTH - 1 - i, y_position);
       }
+
     } while (display.nextPage());
     temperatureArray.mustDraw = false;
     Serial.println("draw: " + String(millis() - drawTime) + " " + String(drawCount));
