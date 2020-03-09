@@ -1,5 +1,12 @@
 ///////////////////////////////////////////////////
 // TODO
+// compiler define selects I2C or SPI
+// compiler define turns NRF on/off
+// compiler define turns serial debugging on/off
+// leading zero at decimal
+// adjustable upper/lower line offset values
+// remove heavy string usage to save memory
+// draw line every full degree for better visualization, but not if eqaul min or max
 ///////////////////////////////////////////////////
 
 //////////////
