@@ -5,7 +5,6 @@
 // compiler define turns serial debugging on/off
 // adjustable upper/lower line offset values
 // remove heavy string usage to save memory
-// draw line every full degree for better visualization, but not if eqaul min or max
 ///////////////////////////////////////////////////
 
 //////////////
@@ -165,8 +164,12 @@ class ValueGraphArray {
     mustDraw = true;
   }
   
-  uint8_t y(uint8_t position){
-    return DISPLAY_HEIGHT - max(1, (values[position] - minimum) / deltaPerPixel);
+  uint8_t y_from_position(uint8_t position){
+    return y_from_temperature(values[position]);
+  }
+
+  uint8_t y_from_temperature(float temperature){
+    return DISPLAY_HEIGHT - max(1, (temperature - minimum) / deltaPerPixel);
   }
   
   void change_interval(uint32_t steps){
@@ -220,6 +223,7 @@ OneWire oneWire(TEMP_SENSOR_PIN);
 DallasTemperature sensors(&oneWire);
 ValueGraphArray temperatureArray = ValueGraphArray();
 float temperature;
+int8_t templine;
 bool tempIsRequested = false;
 uint32_t tempReadTime;
 
@@ -448,8 +452,16 @@ void loop() {
       display.print(lowerRow);
       
       for (uint8_t i=0; i < DISPLAY_WIDTH; i++){
-        uint8_t y_position = temperatureArray.y((DISPLAY_WIDTH - i + temperatureArray.currentPosition) % DISPLAY_WIDTH);
+        uint8_t y_position = temperatureArray.y_from_position((DISPLAY_WIDTH - i + temperatureArray.currentPosition) % DISPLAY_WIDTH);
         display.drawPixel(DISPLAY_WIDTH - 1 - i, y_position);
+      }
+
+      templine = ceil(temperatureArray.minimum);
+      while (templine <= temperatureArray.maximum){
+        for (uint8_t x = 0; x < DISPLAY_WIDTH; x+=4){
+          display.drawPixel(x, temperatureArray.y_from_temperature(templine));
+        }
+        templine++;
       }
 
     } while (display.nextPage());
