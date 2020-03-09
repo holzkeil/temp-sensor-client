@@ -364,7 +364,9 @@ String intervalToString(uint32_t interval){
     decimal = (interval - value * DAY) / HOUR;
     unit = F("d"); 
   }
-  return String(value) + ((decimal > 0) ? (":" + String(decimal)) : "") + unit;
+  
+  String decimalWithLeadingZero = decimal < 10 ? String("0") : String("");
+  return String(value) + ((decimal > 0) ? (":" + decimalWithLeadingZero + String(decimal)) : "") + unit;
 }
 
 DISPLAY_CONSTRUCTOR display(DISPLAY_ROTATION, DISPLAY_PIN_CHIP_SELECT_DS, DISPLAY_PIN_DATA_COMMAND, DISPLAY_PIN_RESET);
