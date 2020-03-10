@@ -3,7 +3,6 @@
 // compiler define selects I2C or SPI
 // compiler define turns NRF on/off
 // compiler define turns serial debugging on/off
-// adjustable upper/lower line offset values
 // remove heavy string usage to save memory
 ///////////////////////////////////////////////////
 
@@ -79,6 +78,8 @@
 #define DISPLAY_WIDTH 128
 #define DISPLAY_HEIGHT 64
 #define DISPLAY_HEADER 16
+#define DISPLAY_UPPER_LINE_OFFSET 6
+#define DISPLAY_LOWER_LINE_OFFSET 14
 #define DISPLAY_FONT u8g2_font_5x8_tf
 //#define DISPLAY_FONT u8g2_font_5x7_tf
 //#define DISPLAY_FONT u8g2_font_4x6_tf
@@ -429,7 +430,7 @@ void loop() {
     display.firstPage();
     do {
       drawCount++;
-      display.setCursor(0, 6);
+      display.setCursor(0, DISPLAY_UPPER_LINE_OFFSET);
       String upperRow = "H " + String(temperatureArray.maximum, TEMP_SENSOR_STRING_DECIMALS);
       if (temperatureArray.stepCount > 1){
         upperRow += " " + String(temperatureArray.values[(temperatureArray.currentPosition + DISPLAY_WIDTH - 1) % DISPLAY_WIDTH], TEMP_SENSOR_STRING_DECIMALS); 
@@ -443,7 +444,7 @@ void loop() {
       }
       display.print(upperRow); 
       
-      display.setCursor(0, 14);
+      display.setCursor(0, DISPLAY_LOWER_LINE_OFFSET);
       String lowerRow = "L " + String(temperatureArray.minimum, TEMP_SENSOR_STRING_DECIMALS);
       if (temperatureArray.stepCount > 1){
         lowerRow += " " + String(temperatureArray.currentStep) + "/" + String(temperatureArray.stepCount); 
