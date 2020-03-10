@@ -1,8 +1,6 @@
 ///////////////////////////////////////////////////
 // TODO
-// compiler define selects I2C or SPI
 // compiler define turns NRF on/off
-// compiler define turns serial debugging on/off
 // remove heavy string usage to save memory
 ///////////////////////////////////////////////////
 
@@ -68,11 +66,11 @@
 // intervals greater that this will be executed every this value
 #define INTERVAL_MAX_STEP_MILLIS 5000
 
-#define DISPLAY_PIN_CHIP_SELECT_DS 10
-#define DISPLAY_PIN_DATA_COMMAND 9
-#define DISPLAY_PIN_RESET 8
-
 #define DISPLAY_SPI true
+#define DISPLAY_PIN_SPI_CHIP_SELECT_DS 10
+#define DISPLAY_PIN_SPI_DATA_COMMAND 9
+#define DISPLAY_PIN_SPI_RESET 8
+
 #define DISPLAY_CONSTRUCTOR_SPI U8G2_SSD1306_128X64_VCOMH0_1_4W_HW_SPI
 #define DISPLAY_CONSTRUCTOR_I2C U8G2_SSD1305_128X64_ADAFRUIT_1_HW_I2C
 #define DISPLAY_ROTATION U8G2_R0
@@ -85,16 +83,11 @@
 //#define DISPLAY_FONT u8g2_font_5x7_tf
 //#define DISPLAY_FONT u8g2_font_4x6_tf
 
+#define SERIAL_DEBUG false
 #define SERIAL_SPEED 115200
 
 #define TASK_DEBUG_BUTTON false
 #define TASK_DEBUG_READTEMP false
-
-#if DISPLAY_SPI
-  DISPLAY_CONSTRUCTOR_SPI display(DISPLAY_ROTATION, DISPLAY_PIN_CHIP_SELECT_DS, DISPLAY_PIN_DATA_COMMAND, DISPLAY_PIN_RESET);
-#else
-  DISPLAY_CONSTRUCTOR_I2C display(DISPLAY_ROTATION);
-#endif
 
 ///////////////////////////////////////////////////
 // Task Class that allows pseudo parallelization //
@@ -121,9 +114,11 @@ class Task {
     run() {
       currentMillis = millis();
       if (currentMillis - previousMillis >= interval) {
+        #if SERIAL_DEBUG
         if ((functionName != TASK_NAME_BUTTON || TASK_DEBUG_BUTTON) && (functionName != TASK_NAME_READTEMP || TASK_DEBUG_READTEMP)){
           Serial.println(functionName + ": " + String(currentMillis - previousMillis));
         }
+        #endif
         previousMillis = currentMillis;
         functionPointer();
       }
@@ -249,7 +244,9 @@ void readTemperature(void){
   if (tempIsRequested && (millis() >= tempReadTime)){
     temperature = sensors.getTempCByIndex(0);
     temperatureArray.add(temperature);
+    #if SERIAL_DEBUG
     Serial.println("T " + String(temperature, 4));
+    #endif
     tempIsRequested = false;
   }
 }
@@ -301,7 +298,9 @@ int8_t oldIntervalPointer;
 
 void updateEeprom() {
   if (oldIntervalPointer != intervalPointer){
+    #if SERIAL_DEBUG
     Serial.println("O " + String(oldIntervalPointer) + " -> N " + String(intervalPointer));
+    #endif
     EEPROM.update(TASK_INTERVAL_REQUESTTEMP_EEPROM_ADDRESS, oldIntervalPointer = intervalPointer);
   }
 }
@@ -317,7 +316,9 @@ uint32_t interval;
 
 void applyIntervalChanges(){
     interval = intervalValues[intervalPointer];
+    #if SERIAL_DEBUG
     Serial.println("I" + String(interval) + " IP" + String(intervalPointer));
+    #endif
     temperatureArray.change_interval(interval > INTERVAL_MAX_STEP_MILLIS ? interval / INTERVAL_MAX_STEP_MILLIS : 1);
     taskRequestTemperature.interval = min(interval, INTERVAL_MAX_STEP_MILLIS);
     taskRequestTemperature.previousMillis = taskUpdateEeprom.previousMillis = millis();
@@ -376,11 +377,19 @@ String intervalToString(uint32_t interval){
   return String(value) + ((decimal > 0) ? (":" + decimalWithLeadingZero + String(decimal)) : "") + unit;
 }
 
+#if DISPLAY_SPI
+  DISPLAY_CONSTRUCTOR_SPI display(DISPLAY_ROTATION, DISPLAY_PIN_SPI_CHIP_SELECT_DS, DISPLAY_PIN_SPI_DATA_COMMAND, DISPLAY_PIN_SPI_RESET);
+#else
+  DISPLAY_CONSTRUCTOR_I2C display(DISPLAY_ROTATION);
+#endif
+
 uint32_t drawTime;
 uint32_t drawCount;
 
 void setup() {
+  #if SERIAL_DEBUG
   Serial.begin(SERIAL_SPEED);
+  #endif
   
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(LED_PIN, OUTPUT); 
@@ -392,7 +401,9 @@ void setup() {
   radioData.sourceRadioId = RADIO_ID_SOURCE;
   radioData.intervalRadio = TASK_INTERVAL_RADIO;
 
+  #if SERIAL_DEBUG
   Serial.println("RDS " + String(sizeof(RadioData)));
+  #endif
   
   sensors.begin();
   sensors.setResolution(TEMP_SENSOR_RESOLUTION);
@@ -474,6 +485,8 @@ void loop() {
 
     } while (display.nextPage());
     temperatureArray.mustDraw = false;
+    #if SERIAL_DEBUG
     Serial.println("draw: " + String(millis() - drawTime) + " " + String(drawCount));
+    #endif
   }
 }
