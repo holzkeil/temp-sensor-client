@@ -15,7 +15,6 @@
 #include <NRFLite.h>
 #include <U8g2lib.h>
 #include <EEPROM.h>
-#include <SPI.h>
 
 ///////////////////////////////////
 // CONSTANTS                     //
@@ -73,7 +72,9 @@
 #define DISPLAY_PIN_DATA_COMMAND 9
 #define DISPLAY_PIN_RESET 8
 
-#define DISPLAY_CONSTRUCTOR U8G2_SSD1306_128X64_VCOMH0_1_4W_HW_SPI
+#define DISPLAY_SPI true
+#define DISPLAY_CONSTRUCTOR_SPI U8G2_SSD1306_128X64_VCOMH0_1_4W_HW_SPI
+#define DISPLAY_CONSTRUCTOR_I2C U8G2_SSD1305_128X64_ADAFRUIT_1_HW_I2C
 #define DISPLAY_ROTATION U8G2_R0
 #define DISPLAY_WIDTH 128
 #define DISPLAY_HEIGHT 64
@@ -88,6 +89,12 @@
 
 #define TASK_DEBUG_BUTTON false
 #define TASK_DEBUG_READTEMP false
+
+#if DISPLAY_SPI
+  DISPLAY_CONSTRUCTOR_SPI display(DISPLAY_ROTATION, DISPLAY_PIN_CHIP_SELECT_DS, DISPLAY_PIN_DATA_COMMAND, DISPLAY_PIN_RESET);
+#else
+  DISPLAY_CONSTRUCTOR_I2C display(DISPLAY_ROTATION);
+#endif
 
 ///////////////////////////////////////////////////
 // Task Class that allows pseudo parallelization //
@@ -341,34 +348,34 @@ Task taskSendRadioData = Task(*sendRadioData, TASK_INTERVAL_RADIO, TASK_NAME_RAD
 String intervalToString(uint32_t interval){
   uint8_t value = 0;
   uint8_t decimal;
-  String unit;
+  char unit;
+  char text[7];
 
   if (interval < MINUTE){
     value = int(interval / SECOND);
     decimal = 0;
-    unit = F("s"); 
+    unit = 's'; 
   }
   else if (interval < HOUR){
     value = int(interval / MINUTE);
     decimal = (interval - value * MINUTE) / SECOND;
-    unit = F("m"); 
+    unit = 'm'; 
   }
   else if (interval < DAY){
     value = int(interval / HOUR);
     decimal = (interval - value * HOUR) / MINUTE;
-    unit = F("h"); 
+    unit = 'h'; 
   }
   else{
     value = int(interval / DAY);
     decimal = (interval - value * DAY) / HOUR;
-    unit = F("d"); 
+    unit = 'd'; 
   }
   
-  String decimalWithLeadingZero = decimal < 10 ? String("0") : String("");
+  String decimalWithLeadingZero = decimal < 10 ? "0" : "";
   return String(value) + ((decimal > 0) ? (":" + decimalWithLeadingZero + String(decimal)) : "") + unit;
 }
 
-DISPLAY_CONSTRUCTOR display(DISPLAY_ROTATION, DISPLAY_PIN_CHIP_SELECT_DS, DISPLAY_PIN_DATA_COMMAND, DISPLAY_PIN_RESET);
 uint32_t drawTime;
 uint32_t drawCount;
 
