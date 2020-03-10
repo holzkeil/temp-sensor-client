@@ -85,7 +85,7 @@
 //#define DISPLAY_FONT u8g2_font_5x7_tf
 //#define DISPLAY_FONT u8g2_font_4x6_tf
 
-#define SERIAL_DEBUG false
+#define SERIAL_DEBUG true
 #define SERIAL_SPEED 115200
 
 #define TASK_DEBUG_BUTTON false
@@ -412,10 +412,9 @@ void setup() {
   }  
   radioData.sourceRadioId = RADIO_ID_SOURCE;
   radioData.intervalRadio = TASK_INTERVAL_RADIO;
-  #endif
-
-  #if SERIAL_DEBUG
-  Serial.println("RDS " + String(sizeof(RadioData)));
+    #if SERIAL_DEBUG
+    Serial.println("RDS " + String(sizeof(RadioData)));
+    #endif
   #endif
   
   sensors.begin();
