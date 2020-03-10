@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////
 // TODO
-// compiler define turns NRF on/off
+// add more interval days, 4 8 12
 // remove heavy string usage to save memory
 ///////////////////////////////////////////////////
 
@@ -43,8 +43,7 @@
 #define BUTTON_LONG_PRESS_THRESHOLD 2000
 #define BUTTON_VERY_LONG_PRESS_THRESHOLD 5000
 
-#define LED_PIN 6
-
+#define RADIO_ENABLED false
 #define RADIO_ID_SOURCE 1
 #define RADIO_ID_DESTINATION 0
 #define RADIO_PIN_CE 2
@@ -56,7 +55,10 @@
 #define RADIO_SPEED NRFLite::BITRATE2MBPS
 #define RADIO_CHANNEL 100 // 0 - 125
 #define RADIO_LED_ON_ERROR true
- 
+
+#define LED_PIN 6
+
+
 // these values can be selected with the one and only button
 // it is the time each pixel represents the temperature
 // totalDuration        128s, 256s, 640s,21:20m,   32m,42:40m,   64m, 2:08h,  4:16h,  6:24h, 10:40h,    12h, 21:20h,     1d,    1.5d,      2d,      3d,      5d,      7d,     10d,     14d,      21d
@@ -206,6 +208,8 @@ class ValueGraphArray {
 // max 32 bytes RadioData        //
 ///////////////////////////////////
 
+#if RADIO_ENABLED
+
 struct RadioData
 {
     uint8_t sourceRadioId;
@@ -217,6 +221,8 @@ struct RadioData
 
 NRFLite radio;
 RadioData radioData;
+
+#endif
 
 /////////////////////////////////////////////////////////
 // Request and Read Temperature Variables and Function //
@@ -328,6 +334,8 @@ void applyIntervalChanges(){
 // Send RadioData Variables and Function //
 ///////////////////////////////////////////
 
+#if RADIO_ENABLED
+
 void sendRadioData(){
     radioData.intervalReadTempGlobal = interval;
     radioData.temperature = temperature;
@@ -336,6 +344,8 @@ void sendRadioData(){
 }
 
 Task taskSendRadioData = Task(*sendRadioData, TASK_INTERVAL_RADIO, TASK_NAME_RADIO);
+
+#endif
 
 //////////////////////////////////
 // Main Variables and Functions //
@@ -392,6 +402,8 @@ void setup() {
   #endif
   
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  #if RADIO_ENABLED
   pinMode(LED_PIN, OUTPUT); 
 
   if (!radio.init(RADIO_ID_SOURCE, RADIO_PIN_CE, RADIO_PIN_CSN, RADIO_SPEED, RADIO_CHANNEL)){
@@ -400,6 +412,7 @@ void setup() {
   }  
   radioData.sourceRadioId = RADIO_ID_SOURCE;
   radioData.intervalRadio = TASK_INTERVAL_RADIO;
+  #endif
 
   #if SERIAL_DEBUG
   Serial.println("RDS " + String(sizeof(RadioData)));
@@ -422,7 +435,9 @@ void setup() {
 }
 
 void loop() {
+  #if RADIO_ENABLED
   taskSendRadioData.run();
+  #endif
   taskRequestTemperature.run();
   taskReadTemperature.run();
   taskUpdateEeprom.run();
