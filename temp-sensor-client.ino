@@ -1,7 +1,14 @@
 ///////////////////////////////////////////////////
 // TODO
-// add more interval days, 4 8 12
 // remove heavy string usage to save memory
+// add menu: button short press: next option; long press: change option
+// - temperatures
+// - save history
+// - load history
+// - on/off auto load on start
+// - on/off degree lines
+// - on/off radio
+// - on/off radio led and radio status
 ///////////////////////////////////////////////////
 
 //////////////
@@ -61,10 +68,10 @@
 
 // these values can be selected with the one and only button
 // it is the time each pixel represents the temperature
-// totalDuration        128s, 256s, 640s,21:20m,   32m,42:40m,   64m, 2:08h,  4:16h,  6:24h, 10:40h,    12h, 21:20h,     1d,    1.5d,      2d,      3d,      5d,      7d,     10d,     14d,      21d
-//singleDuration          1s,   2s,   5s,   10s,   15s,   20s,   30s,    1m,     2m,     3m,     5m,  5:38m,    10m, 11:15m, 16.875m,   22.5m,  33.75m,  56:15m,  78.75m,    112m,  157.5m,    3:56h
-#define INTERVAL_VALUES 1000, 2000, 5000, 10000, 15000, 20000, 30000, 60000, 120000, 180000, 300000, 337500, 600000, 675000, 1012500, 1350000, 2025000, 3375000, 4725000, 6750000, 9450000, 14175000
-#define INTERVAL_VALUE_COUNT 22
+// totalDuration        128s, 256s, 640s,21:20m,   32m,42:40m,   64m, 2:08h,  4:16h,  6:24h, 10:40h,    12h, 21:20h,     1d,    1.5d,      2d,      3d,      4d,      5d,      7d,      8d,     10d,     12d,     16d,      24d
+//singleDuration          1s,   2s,   5s,   10s,   15s,   20s,   30s,    1m,     2m,     3m,     5m,  5:38m,    10m, 11:15m, 16.875m,   22.5m,  33.75m,     45m,  56:15m,  78:45m,     90m,    112m,    135m,    180m,    4:30h
+#define INTERVAL_VALUES 1000, 2000, 5000, 10000, 15000, 20000, 30000, 60000, 120000, 180000, 300000, 337500, 600000, 675000, 1012500, 1350000, 2025000, 2700000, 3375000, 4725000, 5400000, 6750000, 8100000, 10800000, 16200000
+#define INTERVAL_VALUE_COUNT 25
 // intervals greater that this will be executed every this value
 #define INTERVAL_MAX_STEP_MILLIS 5000
 
@@ -113,7 +120,7 @@ class Task {
       return;
     }
 
-    run() {
+    void run() {
       currentMillis = millis();
       if (currentMillis - previousMillis >= interval) {
         #if SERIAL_DEBUG
@@ -148,11 +155,14 @@ class ValueGraphArray {
     float currentValue = 0;
 
   void add(float value){
-    currentValue = (currentValue * currentStep++ + value) / currentStep;
+    currentValue = currentValue * currentStep + value;
+    currentStep++;
+    currentValue /= currentStep;
     values[currentPosition] = currentValue;
     
     if (currentStep == stepCount){
-      currentPosition = ++currentPosition % DISPLAY_WIDTH;
+      currentPosition++;
+      currentPosition %= DISPLAY_WIDTH;
       values[currentPosition] = value;
       currentStep = 0;
       currentValue = 0;
@@ -180,7 +190,8 @@ class ValueGraphArray {
   void change_interval(uint32_t steps){
     stepCount = steps;
     if (currentStep > 0){
-      currentPosition = ++currentPosition % DISPLAY_WIDTH;
+      currentPosition++;
+      currentPosition %= DISPLAY_WIDTH;
       values[currentPosition] = values[(currentPosition + DISPLAY_WIDTH - 1) % DISPLAY_WIDTH];
       currentStep = 0;
       currentValue = 0;
@@ -360,7 +371,6 @@ String intervalToString(uint32_t interval){
   uint8_t value = 0;
   uint8_t decimal;
   char unit;
-  char text[7];
 
   if (interval < MINUTE){
     value = int(interval / SECOND);
@@ -443,7 +453,8 @@ void loop() {
   taskReadButton.run();
   
   if (buttonShortPress){
-    intervalPointer = ++intervalPointer % INTERVAL_VALUE_COUNT;
+    intervalPointer++;
+    intervalPointer %= INTERVAL_VALUE_COUNT;
     applyIntervalChanges();
     buttonShortPress = false;
   }
@@ -491,7 +502,7 @@ void loop() {
 
       templine = ceil(temperatureArray.minimum);
       while (templine <= temperatureArray.maximum){
-        for (uint8_t x = 0; x < DISPLAY_WIDTH; x+=4){
+        for (uint8_t x = 0; x < DISPLAY_WIDTH; x+=8){
           display.drawPixel(x, temperatureArray.y_from_temperature(templine));
         }
         templine++;
