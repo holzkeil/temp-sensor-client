@@ -1,9 +1,7 @@
 ///////////////////////////////////////////////////
 // TODO
 // remove heavy string usage to save memory
-// option class/functions that handle eeprom save/load
 // add menu: button short press: next option; long press: change option
-// - on/off auto load on start
 // - on/off radio
 // - on/off radio led and radio status
 ///////////////////////////////////////////////////
@@ -34,8 +32,13 @@
 // EEPROM addresses of some values
 #define TASK_INTERVAL_REQUESTTEMP_EEPROM_ADDRESS 0
 #define TEMPERATURE_POSITION_EEPROM_ADDRESS 1
-// 128 values = 128 * 4 bytes (float) = 512 + 2
-#define TEMPERATURE_GRAPH_EEPROM_ADDRESS 2
+#define TEMPERATURE_RESOLUTION_EEPROM_ADDRESS 2
+#define DRAW_TEMPERATURE_LINES_EEPROM_ADDRESS 3
+#define TEMPERATURE_LINES_DISTANCE_EEPROM_ADDRESS 4
+#define TEMPERATURE_GRAPH_AUTO_LOAD_EEPROM_ADDRESS 5
+// 128 values = 128 * 4 bytes (float) = 512
+// start is at 512 so it uses the last half of EEPROM
+#define TEMPERATURE_GRAPH_EEPROM_ADDRESS 512
 
 // Serial debugging settings
 #define SERIAL_DEBUG true
@@ -133,6 +136,7 @@ class Task {
       functionPointer = function;
       interval = new_interval;
       previousMillis = 0;
+      currentMillis = 0;
       functionName = name;
       return;
     }
@@ -425,11 +429,12 @@ uint32_t drawCount;
 #endif
 
 uint8_t headerState;
-const uint8_t headerStateCounter = 5;
+const uint8_t headerStateCounter = 6;
 
 bool drawTemplines = true;
 uint8_t templineDistance = 8;
 const uint8_t templineDistanceMax = 16;
+bool autoLoadGraphHistory = true;
 
 void setup() {
   #if SERIAL_DEBUG
@@ -452,6 +457,7 @@ void setup() {
     #endif
   #endif
   
+  EEPROM.get(TEMPERATURE_RESOLUTION_EEPROM_ADDRESS, temperatureResolution);
   sensors.begin();
   sensors.setResolution(temperatureResolution);
   sensors.setWaitForConversion(false);
@@ -461,11 +467,18 @@ void setup() {
   display.setColorIndex(1);
 
   // load old data from EEPROM
+  EEPROM.get(DRAW_TEMPERATURE_LINES_EEPROM_ADDRESS, drawTemplines);
+  EEPROM.get(TEMPERATURE_LINES_DISTANCE_EEPROM_ADDRESS, templineDistance);
+
   EEPROM.get(TASK_INTERVAL_REQUESTTEMP_EEPROM_ADDRESS, intervalPointer);
   oldIntervalPointer = intervalPointer %= INTERVAL_VALUE_COUNT;
   applyIntervalChanges();
 
-  temperatureArray.readHistory();
+  EEPROM.get(TEMPERATURE_GRAPH_AUTO_LOAD_EEPROM_ADDRESS, autoLoadGraphHistory);
+  if (autoLoadGraphHistory){
+    temperatureArray.readHistory();
+  }
+
   requestTemperature();
 }
 
@@ -493,17 +506,22 @@ void loop() {
       case 0: intervalPointer = (intervalPointer + 1) % INTERVAL_VALUE_COUNT;
               applyIntervalChanges(); 
               break;
-      case 1: drawTemplines = !drawTemplines;  
+      case 1: drawTemplines = !drawTemplines;
+              EEPROM.put(DRAW_TEMPERATURE_LINES_EEPROM_ADDRESS, drawTemplines);
               break;
       case 2: templineDistance = templineDistance == templineDistanceMax ? 1 : templineDistance + 1;
+              EEPROM.put(TEMPERATURE_LINES_DISTANCE_EEPROM_ADDRESS, templineDistance);
               break;
       case 3: temperatureResolution = temperatureResolution == 12 ? 9 : temperatureResolution + 1;
               sensors.setResolution(temperatureResolution);
+              EEPROM.put(TEMPERATURE_RESOLUTION_EEPROM_ADDRESS, temperatureResolution);
               break;
       case 4: temperatureArray.readHistory();  
               break;
       case 5: temperatureArray.writeHistory();
               break;
+      case 6: autoLoadGraphHistory = !autoLoadGraphHistory;
+              EEPROM.put(TEMPERATURE_GRAPH_AUTO_LOAD_EEPROM_ADDRESS, autoLoadGraphHistory);
       default: 
               break;
     }
@@ -516,17 +534,22 @@ void loop() {
       case 0: intervalPointer = intervalPointer == 0 ? INTERVAL_VALUE_COUNT - 1 : intervalPointer - 1;
               applyIntervalChanges(); 
               break;
-      case 1: drawTemplines = !drawTemplines;  
+      case 1: drawTemplines = !drawTemplines;
+              EEPROM.put(DRAW_TEMPERATURE_LINES_EEPROM_ADDRESS, drawTemplines);
               break;
       case 2: templineDistance = templineDistance == 1 ? templineDistanceMax : templineDistance - 1;
+              EEPROM.put(TEMPERATURE_LINES_DISTANCE_EEPROM_ADDRESS, templineDistance);
               break;
       case 3: temperatureResolution = temperatureResolution == 9 ? 12 : temperatureResolution - 1;
               sensors.setResolution(temperatureResolution);
+              EEPROM.put(TEMPERATURE_RESOLUTION_EEPROM_ADDRESS, temperatureResolution);
               break;
       case 4: temperatureArray.readHistory();  
               break;
       case 5: temperatureArray.writeHistory();
               break;
+      case 6: autoLoadGraphHistory = !autoLoadGraphHistory;
+              EEPROM.put(TEMPERATURE_GRAPH_AUTO_LOAD_EEPROM_ADDRESS, autoLoadGraphHistory);
       default: 
               break;
     }
@@ -595,6 +618,11 @@ void loop() {
                 break;
         case 5: display.setCursor(0, DISPLAY_UPPER_LINE_OFFSET);
                 display.print(F("WRITE Graph History"));  
+                break;
+        case 6: display.setCursor(0, DISPLAY_UPPER_LINE_OFFSET);
+                display.print(F("Auto Load Graph History"));
+                display.setCursor(0, DISPLAY_LOWER_LINE_OFFSET);
+                display.print(autoLoadGraphHistory);  
                 break;
         default: 
                 break;
