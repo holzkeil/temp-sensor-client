@@ -19,9 +19,9 @@ Running on a Pro Mini 5V. Is use in rooms to monitor the temperature.
 
 ## Images ##
 
-[Overview](images/overview.jpg)
-[Graph](images/graph.jpg)
-[Settings](images/setting.jpg)
+![Overview](images/overview.jpg)
+![Graph](images/graph.jpg)
+![Settings](images/setting.jpg)
 
 
 
